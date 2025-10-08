@@ -31,6 +31,10 @@ def geocode_address(addr):
     except:
         return None
 
+# --- Helper: convert (lat, lon) to (lon, lat) for pydeck ---
+def latlon_to_lonlat(latlon):
+    return [latlon[1], latlon[0]]  # pydeck expects [lon, lat]
+
 # --- Only run comparison when button is pressed ---
 if st.button("Compare & Track Routes"):
     try:
@@ -47,7 +51,9 @@ if st.button("Compare & Track Routes"):
             # --- Get current location if tracking enabled ---
             current_loc = None
             if enable_tracking:
-                loc = streamlit_js_eval(js_expressions="navigator.geolocation.getCurrentPosition((pos)=>pos.coords)", key="loc")
+                loc = streamlit_js_eval(
+                    js_expressions="navigator.geolocation.getCurrentPosition((pos)=>pos.coords)", key="loc"
+                )
                 if loc:
                     current_loc = (loc['latitude'], loc['longitude'])
 
@@ -70,20 +76,17 @@ if st.button("Compare & Track Routes"):
                     st.info("✅ You’re close to the first drop-off. Switching to Route 2.")
                     route1_done = True
 
-            # --- Prepare pydeck layers ---
-            # Markers
+            # --- Prepare markers ---
             markers = [
-                {"position": locs["pickup_1"], "color": [0, 0, 255], "radius": 100, "name": "Pickup 1"},
-                {"position": locs["dropoff_1"], "color": [0, 0, 255], "radius": 100, "name": "Dropoff 1"},
-                {"position": locs["pickup_2"], "color": [255, 0, 0], "radius": 100, "name": "Pickup 2"},
-                {"position": locs["dropoff_2"], "color": [255, 0, 0], "radius": 100, "name": "Dropoff 2"},
+                {"position": latlon_to_lonlat(locs["pickup_1"]), "color": [128,128,128] if route1_done else [0,0,255], "radius": 100, "name": "Pickup 1"},
+                {"position": latlon_to_lonlat(locs["dropoff_1"]), "color": [128,128,128] if route1_done else [0,0,255], "radius": 100, "name": "Dropoff 1"},
+                {"position": latlon_to_lonlat(locs["pickup_2"]), "color": [0,0,255] if route1_done else [255,0,0], "radius": 100, "name": "Pickup 2"},
+                {"position": latlon_to_lonlat(locs["dropoff_2"]), "color": [0,0,255] if route1_done else [255,0,0], "radius": 100, "name": "Dropoff 2"}
             ]
-            if route1_done:
-                # Gray out route1 markers
-                markers[0]["color"] = [128, 128, 128]
-                markers[1]["color"] = [128, 128, 128]
 
-            # Scatterplot layer for markers
+            if current_loc:
+                markers.append({"position": latlon_to_lonlat(current_loc), "color": [0,255,0], "radius": 100, "name": "You"})
+
             scatter_layer = pdk.Layer(
                 "ScatterplotLayer",
                 data=markers,
@@ -93,38 +96,22 @@ if st.button("Compare & Track Routes"):
                 pickable=True
             )
 
-            def latlon_to_lonlat(latlon):
-    return [latlon[1], latlon[0]]  # [lon, lat]
-
-path_layer = pdk.Layer(
-    "PathLayer",
-    data=[
-        {"path": [latlon_to_lonlat(locs["pickup_1"]), latlon_to_lonlat(locs["dropoff_1"])],
-         "color": [128, 128, 128] if route1_done else [0, 0, 255]},
-        {"path": [latlon_to_lonlat(locs["pickup_2"]), latlon_to_lonlat(locs["dropoff_2"])],
-         "color": [0, 0, 255] if route1_done else [255, 0, 0]}
-    ],
-    get_path="path",
-    get_color="color",
-    width_scale=10,
-    width_min_pixels=5
-)
-
+            # --- Prepare paths ---
+            path_layer = pdk.Layer(
+                "PathLayer",
+                data=[
+                    {"path": [latlon_to_lonlat(locs["pickup_1"]), latlon_to_lonlat(locs["dropoff_1"])],
+                     "color": [128,128,128] if route1_done else [0,0,255]},
+                    {"path": [latlon_to_lonlat(locs["pickup_2"]), latlon_to_lonlat(locs["dropoff_2"])],
+                     "color": [0,0,255] if route1_done else [255,0,0]}
+                ],
+                get_path="path",
+                get_color="color",
+                width_scale=10,
+                width_min_pixels=5
             )
 
-            # Add current location marker
-            if current_loc:
-                markers.append({"position": current_loc, "color": [0, 255, 0], "radius": 100, "name": "You"})
-                scatter_layer = pdk.Layer(
-                    "ScatterplotLayer",
-                    data=markers,
-                    get_position="position",
-                    get_fill_color="color",
-                    get_radius="radius",
-                    pickable=True
-                )
-
-            # --- Deck initialization ---
+            # --- Create deck ---
             deck = pdk.Deck(
                 layers=[scatter_layer, path_layer],
                 initial_view_state=pdk.ViewState(
@@ -136,10 +123,8 @@ path_layer = pdk.Layer(
                 tooltip={"text": "{name}"}
             )
 
-            # --- Display map ---
             st.pydeck_chart(deck)
 
     except Exception as e:
         st.error(f"Error: {e}")
-
 
