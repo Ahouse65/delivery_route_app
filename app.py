@@ -43,7 +43,6 @@ def get_route_points(start, end):
         for leg in directions[0]['legs']:
             for step in leg['steps']:
                 points.append((step['start_location']['lat'], step['start_location']['lng']))
-            # add end location of last step
             points.append((leg['end_location']['lat'], leg['end_location']['lng']))
     return [latlon_to_lonlat(p) for p in points]
 
@@ -99,24 +98,16 @@ if st.button("Compare & Track Routes"):
             if current_loc:
                 labels.append({"position": latlon_to_lonlat(current_loc), "label": "You"})
 
-            # --- Text layer ---
-            text_layer = pdk.Layer(
-                "TextLayer",
-                data=labels,
-                get_position="position",
-                get_text="label",
-                get_color=[0,200,0],  # bright green
-                get_size=32,
-                get_alignment_baseline="'center'",
-                get_alignment_horizontal="'center'"
-            )
+            # --- Get full route points ---
+            route1_points = get_route_points(pickup_1, dropoff_1)
+            route2_points = get_route_points(pickup_2, dropoff_2)
 
-            # --- Path layer (curved/accurate routing) ---
+            # --- Path layer ---
             path_layer = pdk.Layer(
                 "PathLayer",
                 data=[
-                    {"path": get_route_points(pickup_1, dropoff_1), "color": [128,128,128] if route1_done else [0,0,255]},
-                    {"path": get_route_points(pickup_2, dropoff_2), "color": [0,0,255] if route1_done else [255,0,0]}
+                    {"path": route1_points, "color": [128,128,128] if route1_done else [0,0,255]},
+                    {"path": route2_points, "color": [0,0,255] if route1_done else [255,0,0]}
                 ],
                 get_path="path",
                 get_color="color",
@@ -124,9 +115,21 @@ if st.button("Compare & Track Routes"):
                 width_min_pixels=5
             )
 
-            # --- Map center & zoom ---
-            all_lats = [loc[0] for loc in locs.values()]
-            all_lons = [loc[1] for loc in locs.values()]
+            # --- Text layer ---
+            text_layer = pdk.Layer(
+                "TextLayer",
+                data=labels,
+                get_position="position",
+                get_text="label",
+                get_color=[0,200,0],
+                get_size=32,
+                get_alignment_baseline="'center'",
+                get_alignment_horizontal="'center'"
+            )
+
+            # --- Compute bounding box of all route points + current location ---
+            all_lats = [p[1] for p in route1_points + route2_points]
+            all_lons = [p[0] for p in route1_points + route2_points]
             if current_loc:
                 all_lats.append(current_loc[0])
                 all_lons.append(current_loc[1])
@@ -139,7 +142,7 @@ if st.button("Compare & Track Routes"):
 
             # --- Deck ---
             deck = pdk.Deck(
-                layers=[text_layer, path_layer],
+                layers=[path_layer, text_layer],
                 initial_view_state=pdk.ViewState(
                     latitude=mid_lat,
                     longitude=mid_lon,
@@ -153,3 +156,4 @@ if st.button("Compare & Track Routes"):
 
     except Exception as e:
         st.error(f"Error: {e}")
+
