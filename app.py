@@ -87,28 +87,29 @@ if st.button("Compare & Track Routes"):
             if current_loc:
                 markers.append({"position": latlon_to_lonlat(current_loc), "color": [0,255,0], "label": "You"})
 
-            # --- Layers ---
+            # --- Scatter layer for circles ---
             scatter_layer = pdk.Layer(
                 "ScatterplotLayer",
                 data=markers,
                 get_position="position",
                 get_fill_color="color",
-                get_radius=150,
+                get_radius=200,
                 pickable=True
             )
 
+            # --- Text layer for centered labels ---
             text_layer = pdk.Layer(
                 "TextLayer",
                 data=markers,
                 get_position="position",
                 get_text="label",
-                get_color=[0,0,0],
-                get_size=28,                   # larger text
-                get_angle=0,
-                get_alignment_baseline="'bottom'",
-                get_pixel_offset=[0, -15]      # move text slightly above marker
+                get_color=[255,255,255],  # white text for contrast
+                get_size=28,
+                get_alignment_baseline="'center'",
+                get_alignment_horizontal="'center'"
             )
 
+            # --- Path layer ---
             path_layer = pdk.Layer(
                 "PathLayer",
                 data=[
