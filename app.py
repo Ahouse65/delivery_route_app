@@ -22,6 +22,9 @@ max_after = st.sidebar.slider("Max deviation after 1st delivery (miles)", 0.5, 1
 switch_threshold = st.sidebar.slider("Switch route when within (miles)", 0.1, 1.0, 0.25)
 enable_tracking = st.sidebar.toggle("Enable Live Tracking", value=False)
 
+# --- Container to hold map ---
+map_container = st.container()
+
 if st.button("Compare & Track Routes"):
     try:
         # --- Geocode all locations ---
@@ -100,9 +103,10 @@ if st.button("Compare & Track Routes"):
             folium.CircleMarker(location=current_loc, radius=6, color="green",
                                 fill=True, fill_color="green", popup="You").add_to(m)
 
-        st_folium(m, width=900, height=600)
+        # --- Display map in container ---
+        with map_container:
+            st_folium(m, width=900, height=600)
 
     except Exception as e:
         st.error(f"Error: {e}")
 
-        st.error("Please enter all four addresses before comparing.")
