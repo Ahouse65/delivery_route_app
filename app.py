@@ -93,17 +93,23 @@ if st.button("Compare & Track Routes"):
                 pickable=True
             )
 
-            # Path layer for routes
-            path_layer = pdk.Layer(
-                "PathLayer",
-                data=[
-                    {"path": [locs["pickup_1"], locs["dropoff_1"]], "color": [128, 128, 128] if route1_done else [0, 0, 255]},
-                    {"path": [locs["pickup_2"], locs["dropoff_2"]], "color": [0, 0, 255] if route1_done else [255, 0, 0]}
-                ],
-                get_path="path",
-                get_color="color",
-                width_scale=10,
-                width_min_pixels=5
+            def latlon_to_lonlat(latlon):
+    return [latlon[1], latlon[0]]  # [lon, lat]
+
+path_layer = pdk.Layer(
+    "PathLayer",
+    data=[
+        {"path": [latlon_to_lonlat(locs["pickup_1"]), latlon_to_lonlat(locs["dropoff_1"])],
+         "color": [128, 128, 128] if route1_done else [0, 0, 255]},
+        {"path": [latlon_to_lonlat(locs["pickup_2"]), latlon_to_lonlat(locs["dropoff_2"])],
+         "color": [0, 0, 255] if route1_done else [255, 0, 0]}
+    ],
+    get_path="path",
+    get_color="color",
+    width_scale=10,
+    width_min_pixels=5
+)
+
             )
 
             # Add current location marker
@@ -135,4 +141,5 @@ if st.button("Compare & Track Routes"):
 
     except Exception as e:
         st.error(f"Error: {e}")
+
 
