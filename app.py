@@ -35,7 +35,7 @@ def geocode_address(addr):
 def latlon_to_lonlat(latlon):
     return [latlon[1], latlon[0]]  # pydeck expects [lon, lat]
 
-# --- Only run comparison when button is pressed ---
+# --- Run comparison when button is pressed ---
 if st.button("Compare & Track Routes"):
     try:
         locs = {
@@ -48,7 +48,7 @@ if st.button("Compare & Track Routes"):
         if None in locs.values():
             st.error("⚠️ One or more addresses could not be geocoded.")
         else:
-            # --- Get current location if tracking enabled ---
+            # --- Current location ---
             current_loc = None
             if enable_tracking:
                 loc = streamlit_js_eval(
@@ -57,7 +57,7 @@ if st.button("Compare & Track Routes"):
                 if loc:
                     current_loc = (loc['latitude'], loc['longitude'])
 
-            # --- Compute distances for route 2 decision ---
+            # --- Distance checks ---
             dist_before = geodesic(locs["pickup_1"], locs["pickup_2"]).miles
             dist_after = geodesic(locs["dropoff_1"], locs["pickup_2"]).miles
             within_limits = dist_before <= max_before and dist_after <= max_after
@@ -67,7 +67,7 @@ if st.button("Compare & Track Routes"):
             else:
                 st.warning(f"⚠️ Route 2 exceeds limits: {dist_before:.2f} mi before, {dist_after:.2f} mi after")
 
-            # --- Determine if Route 1 is done ---
+            # --- Route 1 completion check ---
             route1_done = False
             if enable_tracking and current_loc:
                 to_drop1 = geodesic(current_loc, locs["dropoff_1"]).miles
@@ -76,23 +76,24 @@ if st.button("Compare & Track Routes"):
                     st.info("✅ You’re close to the first drop-off. Switching to Route 2.")
                     route1_done = True
 
-            # --- Prepare markers ---
+            # --- Markers data ---
             markers = [
-                {"position": latlon_to_lonlat(locs["pickup_1"]), "color": [128,128,128] if route1_done else [0,0,255], "radius": 100, "name": "P1", "label": "P"},
-                {"position": latlon_to_lonlat(locs["dropoff_1"]), "color": [128,128,128] if route1_done else [0,0,255], "radius": 100, "name": "D1", "label": "D"},
-                {"position": latlon_to_lonlat(locs["pickup_2"]), "color": [0,0,255] if route1_done else [255,0,0], "radius": 100, "name": "P2", "label": "P"},
-                {"position": latlon_to_lonlat(locs["dropoff_2"]), "color": [0,0,255] if route1_done else [255,0,0], "radius": 100, "name": "D2", "label": "D"}
+                {"position": latlon_to_lonlat(locs["pickup_1"]), "color": [128,128,128] if route1_done else [0,0,255], "label": "P"},
+                {"position": latlon_to_lonlat(locs["dropoff_1"]), "color": [128,128,128] if route1_done else [0,0,255], "label": "D"},
+                {"position": latlon_to_lonlat(locs["pickup_2"]), "color": [0,0,255] if route1_done else [255,0,0], "label": "P"},
+                {"position": latlon_to_lonlat(locs["dropoff_2"]), "color": [0,0,255] if route1_done else [255,0,0], "label": "D"}
             ]
 
             if current_loc:
-                markers.append({"position": latlon_to_lonlat(current_loc), "color": [0,255,0], "radius": 100, "name": "You", "label": "You"})
+                markers.append({"position": latlon_to_lonlat(current_loc), "color": [0,255,0], "label": "You"})
 
+            # --- Layers ---
             scatter_layer = pdk.Layer(
                 "ScatterplotLayer",
                 data=markers,
                 get_position="position",
                 get_fill_color="color",
-                get_radius="radius",
+                get_radius=150,
                 pickable=True
             )
 
@@ -102,18 +103,17 @@ if st.button("Compare & Track Routes"):
                 get_position="position",
                 get_text="label",
                 get_color=[0,0,0],
-                get_size=16,
-                get_alignment_baseline="'bottom'"
+                get_size=28,                   # larger text
+                get_angle=0,
+                get_alignment_baseline="'bottom'",
+                get_pixel_offset=[0, -15]      # move text slightly above marker
             )
 
-            # --- Prepare paths ---
             path_layer = pdk.Layer(
                 "PathLayer",
                 data=[
-                    {"path": [latlon_to_lonlat(locs["pickup_1"]), latlon_to_lonlat(locs["dropoff_1"])],
-                     "color": [128,128,128] if route1_done else [0,0,255]},
-                    {"path": [latlon_to_lonlat(locs["pickup_2"]), latlon_to_lonlat(locs["dropoff_2"])],
-                     "color": [0,0,255] if route1_done else [255,0,0]}
+                    {"path": [latlon_to_lonlat(locs["pickup_1"]), latlon_to_lonlat(locs["dropoff_1"])], "color": [128,128,128] if route1_done else [0,0,255]},
+                    {"path": [latlon_to_lonlat(locs["pickup_2"]), latlon_to_lonlat(locs["dropoff_2"])], "color": [0,0,255] if route1_done else [255,0,0]}
                 ],
                 get_path="path",
                 get_color="color",
@@ -121,7 +121,7 @@ if st.button("Compare & Track Routes"):
                 width_min_pixels=5
             )
 
-            # --- Compute map center and zoom to fit all points ---
+            # --- Map center & zoom ---
             all_lats = [loc[0] for loc in locs.values()]
             all_lons = [loc[1] for loc in locs.values()]
             if current_loc:
@@ -132,9 +132,9 @@ if st.button("Compare & Track Routes"):
             mid_lon = (max(all_lons) + min(all_lons)) / 2
             lat_range = max(all_lats) - min(all_lats)
             lon_range = max(all_lons) - min(all_lons)
-            zoom = max(1, 13 - max(lat_range, lon_range)*10)  # approximate zoom adjustment
+            zoom = max(1, 13 - max(lat_range, lon_range)*10)
 
-            # --- Create deck ---
+            # --- Deck ---
             deck = pdk.Deck(
                 layers=[scatter_layer, text_layer, path_layer],
                 initial_view_state=pdk.ViewState(
@@ -143,7 +143,7 @@ if st.button("Compare & Track Routes"):
                     zoom=zoom,
                     pitch=0
                 ),
-                tooltip={"text": "{name}"}
+                tooltip={"text": "{label}"}
             )
 
             st.pydeck_chart(deck)
