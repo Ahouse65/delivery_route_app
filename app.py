@@ -35,6 +35,18 @@ def geocode_address(addr):
 def latlon_to_lonlat(latlon):
     return [latlon[1], latlon[0]]  # pydeck expects [lon, lat]
 
+# --- Helper: get route points from Google Maps Directions API ---
+def get_route_points(start, end):
+    directions = gmaps.directions(start, end, mode="driving")
+    points = []
+    if directions:
+        for leg in directions[0]['legs']:
+            for step in leg['steps']:
+                points.append((step['start_location']['lat'], step['start_location']['lng']))
+            # add end location of last step
+            points.append((leg['end_location']['lat'], leg['end_location']['lng']))
+    return [latlon_to_lonlat(p) for p in points]
+
 # --- Run comparison when button is pressed ---
 if st.button("Compare & Track Routes"):
     try:
@@ -76,7 +88,7 @@ if st.button("Compare & Track Routes"):
                     st.info("✅ You’re close to the first drop-off. Switching to Route 2.")
                     route1_done = True
 
-            # --- Labels data only (green P/D labels) ---
+            # --- Labels data (green P/D) ---
             labels = [
                 {"position": latlon_to_lonlat(locs["pickup_1"]), "label": "P"},
                 {"position": latlon_to_lonlat(locs["dropoff_1"]), "label": "D"},
@@ -87,7 +99,7 @@ if st.button("Compare & Track Routes"):
             if current_loc:
                 labels.append({"position": latlon_to_lonlat(current_loc), "label": "You"})
 
-            # --- Text layer for centered green labels ---
+            # --- Text layer ---
             text_layer = pdk.Layer(
                 "TextLayer",
                 data=labels,
@@ -99,12 +111,12 @@ if st.button("Compare & Track Routes"):
                 get_alignment_horizontal="'center'"
             )
 
-            # --- Path layer ---
+            # --- Path layer (curved/accurate routing) ---
             path_layer = pdk.Layer(
                 "PathLayer",
                 data=[
-                    {"path": [latlon_to_lonlat(locs["pickup_1"]), latlon_to_lonlat(locs["dropoff_1"])], "color": [128,128,128] if route1_done else [0,0,255]},
-                    {"path": [latlon_to_lonlat(locs["pickup_2"]), latlon_to_lonlat(locs["dropoff_2"])], "color": [0,0,255] if route1_done else [255,0,0]}
+                    {"path": get_route_points(pickup_1, dropoff_1), "color": [128,128,128] if route1_done else [0,0,255]},
+                    {"path": get_route_points(pickup_2, dropoff_2), "color": [0,0,255] if route1_done else [255,0,0]}
                 ],
                 get_path="path",
                 get_color="color",
