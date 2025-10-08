@@ -5,12 +5,15 @@ from streamlit_folium import st_folium
 from geopy.distance import geodesic
 from streamlit_js_eval import streamlit_js_eval
 
+# --- Page setup ---
 st.set_page_config(page_title="Smart Delivery Route Optimizer", layout="wide")
 st.title("🚗 Smart Delivery Route Optimizer with Live Tracking")
 
+# --- Google Maps API ---
 API_KEY = st.secrets["API_KEY"]
 gmaps = googlemaps.Client(key=API_KEY)
 
+# --- Sidebar inputs ---
 st.sidebar.header("🗺️ Route Inputs")
 pickup_1 = st.sidebar.text_input("First Pickup Address")
 dropoff_1 = st.sidebar.text_input("First Dropoff Address")
@@ -22,29 +25,41 @@ max_after = st.sidebar.slider("Max deviation after 1st delivery (miles)", 0.5, 1
 switch_threshold = st.sidebar.slider("Switch route when within (miles)", 0.1, 1.0, 0.25)
 enable_tracking = st.sidebar.toggle("Enable Live Tracking", value=False)
 
-# --- Container to hold map ---
+# --- Container for the map ---
 map_container = st.container()
 
+# --- Persistent map state ---
+if 'map_center' not in st.session_state:
+    st.session_state.map_center = None
+if 'map_zoom' not in st.session_state:
+    st.session_state.map_zoom = 13  # default zoom
+
+# --- Main button ---
 if st.button("Compare & Track Routes"):
     try:
-        # --- Geocode all locations ---
+        # --- Geocode addresses ---
         locs = {name: gmaps.geocode(addr)[0]['geometry']['location'] for name, addr in {
             "pickup_1": pickup_1, "dropoff_1": dropoff_1,
             "pickup_2": pickup_2, "dropoff_2": dropoff_2
         }.items()}
 
-        # --- Get current position (if enabled) ---
+        # --- Current position if tracking enabled ---
         current_loc = None
         if enable_tracking:
-            loc = streamlit_js_eval(js_expressions="navigator.geolocation.getCurrentPosition((pos)=>pos.coords)", key="loc")
+            loc = streamlit_js_eval(
+                js_expressions="navigator.geolocation.getCurrentPosition((pos)=>pos.coords)", 
+                key="loc"
+            )
             if loc:
                 current_loc = (loc['latitude'], loc['longitude'])
 
-        # --- Create map centered on current or first pickup ---
+        # --- Determine map center ---
         center = current_loc if current_loc else (locs["pickup_1"]["lat"], locs["pickup_1"]["lng"])
-        m = folium.Map(location=center, zoom_start=13)
 
-        # --- Helper to draw routes ---
+        # --- Create map with persistent center & zoom ---
+        m = folium.Map(location=st.session_state.map_center or center, zoom_start=st.session_state.map_zoom)
+
+        # --- Helper function to draw routes ---
         def draw_route(start, end, color):
             directions = gmaps.directions(locs[start], locs[end], mode="driving")
             points = []
@@ -54,7 +69,7 @@ if st.button("Compare & Track Routes"):
             folium.PolyLine(points, color=color, weight=5, opacity=0.8).add_to(m)
             return directions
 
-        # --- Compute distances ---
+        # --- Compute distances for decision logic ---
         dist_before = geodesic(
             (locs["pickup_1"]["lat"], locs["pickup_1"]["lng"]),
             (locs["pickup_2"]["lat"], locs["pickup_2"]["lng"])
@@ -64,14 +79,14 @@ if st.button("Compare & Track Routes"):
             (locs["pickup_2"]["lat"], locs["pickup_2"]["lng"])
         ).miles
 
-        # --- Determine if route 2 fits ---
+        # --- Check if Route 2 fits ---
         within_limits = dist_before <= max_before and dist_after <= max_after
         if within_limits:
             st.success(f"✅ Route 2 fits: {dist_before:.2f} mi before, {dist_after:.2f} mi after")
         else:
             st.warning(f"⚠️ Route 2 exceeds limits: {dist_before:.2f} mi before, {dist_after:.2f} mi after")
 
-        # --- Determine if route 1 completed ---
+        # --- Determine if Route 1 is complete ---
         route1_done = False
         if enable_tracking and current_loc:
             to_drop1 = geodesic(current_loc, (locs["dropoff_1"]["lat"], locs["dropoff_1"]["lng"])).miles
@@ -103,10 +118,12 @@ if st.button("Compare & Track Routes"):
             folium.CircleMarker(location=current_loc, radius=6, color="green",
                                 fill=True, fill_color="green", popup="You").add_to(m)
 
-        # --- Display map in container ---
+        # --- Display map in persistent container ---
         with map_container:
-            st_folium(m, width=900, height=600)
+            map_data = st_folium(m, width=900, height=600)
+            if map_data and 'center' in map_data:
+                st.session_state.map_center = map_data['center']
+                st.session_state.map_zoom = map_data['zoom']
 
     except Exception as e:
         st.error(f"Error: {e}")
-
