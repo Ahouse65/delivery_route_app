@@ -76,34 +76,24 @@ if st.button("Compare & Track Routes"):
                     st.info("✅ You’re close to the first drop-off. Switching to Route 2.")
                     route1_done = True
 
-            # --- Markers data ---
-            markers = [
-                {"position": latlon_to_lonlat(locs["pickup_1"]), "color": [128,128,128] if route1_done else [0,0,255], "label": "P"},
-                {"position": latlon_to_lonlat(locs["dropoff_1"]), "color": [128,128,128] if route1_done else [0,0,255], "label": "D"},
-                {"position": latlon_to_lonlat(locs["pickup_2"]), "color": [0,0,255] if route1_done else [255,0,0], "label": "P"},
-                {"position": latlon_to_lonlat(locs["dropoff_2"]), "color": [0,0,255] if route1_done else [255,0,0], "label": "D"}
+            # --- Labels data only (no circles) ---
+            labels = [
+                {"position": latlon_to_lonlat(locs["pickup_1"]), "label": "P"},
+                {"position": latlon_to_lonlat(locs["dropoff_1"]), "label": "D"},
+                {"position": latlon_to_lonlat(locs["pickup_2"]), "label": "P"},
+                {"position": latlon_to_lonlat(locs["dropoff_2"]), "label": "D"}
             ]
 
             if current_loc:
-                markers.append({"position": latlon_to_lonlat(current_loc), "color": [0,255,0], "label": "You"})
-
-            # --- Scatter layer for circles ---
-            scatter_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=markers,
-                get_position="position",
-                get_fill_color="color",
-                get_radius=200,
-                pickable=True
-            )
+                labels.append({"position": latlon_to_lonlat(current_loc), "label": "You"})
 
             # --- Text layer for centered labels ---
             text_layer = pdk.Layer(
                 "TextLayer",
-                data=markers,
+                data=labels,
                 get_position="position",
                 get_text="label",
-                get_color=[255,255,255],  # white text for contrast
+                get_color=[0,0,0],
                 get_size=28,
                 get_alignment_baseline="'center'",
                 get_alignment_horizontal="'center'"
@@ -137,7 +127,7 @@ if st.button("Compare & Track Routes"):
 
             # --- Deck ---
             deck = pdk.Deck(
-                layers=[scatter_layer, text_layer, path_layer],
+                layers=[text_layer, path_layer],
                 initial_view_state=pdk.ViewState(
                     latitude=mid_lat,
                     longitude=mid_lon,
