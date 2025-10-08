@@ -76,7 +76,7 @@ if st.button("Compare & Track Routes"):
                     st.info("✅ You’re close to the first drop-off. Switching to Route 2.")
                     route1_done = True
 
-            # --- Labels data only (no circles) ---
+            # --- Labels data only (green P/D labels) ---
             labels = [
                 {"position": latlon_to_lonlat(locs["pickup_1"]), "label": "P"},
                 {"position": latlon_to_lonlat(locs["dropoff_1"]), "label": "D"},
@@ -87,14 +87,14 @@ if st.button("Compare & Track Routes"):
             if current_loc:
                 labels.append({"position": latlon_to_lonlat(current_loc), "label": "You"})
 
-            # --- Text layer for centered labels ---
+            # --- Text layer for centered green labels ---
             text_layer = pdk.Layer(
                 "TextLayer",
                 data=labels,
                 get_position="position",
                 get_text="label",
-                get_color=[0,0,0],
-                get_size=28,
+                get_color=[0,200,0],  # bright green
+                get_size=32,
                 get_alignment_baseline="'center'",
                 get_alignment_horizontal="'center'"
             )
@@ -141,4 +141,3 @@ if st.button("Compare & Track Routes"):
 
     except Exception as e:
         st.error(f"Error: {e}")
-
