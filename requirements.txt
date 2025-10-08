@@ -1,2 +1,6 @@
-﻿streamlit
+streamlit
 googlemaps
+folium
+streamlit-folium
+geopy
+streamlit_js_eval
