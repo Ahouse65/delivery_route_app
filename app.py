@@ -91,24 +91,16 @@ with col_map:
         folium.PolyLine([st.session_state["b_pickup"], st.session_state["b_dropoff"]],
                         color="blue", weight=5, opacity=0.8).add_to(m)
 
-    # Enable map double-click for adding marker
-    dblclick_js = """
-        function(e){
-            var coords = e.latlng;
-            var coordsStr = coords.lat + "," + coords.lng;
-            alert('Double-click at ' + coordsStr + '. Please set manually in Streamlit for now.');
-        }
-    """
-    m.add_child(folium.LatLngPopup())  # Shows lat/lon on double-click
+    # Enable map lat/lon popup on double-click
+    m.add_child(folium.LatLngPopup())
 
     map_data = st_folium(m, width="100%", height=650, returned_objects=['last_clicked'])
 
-    # Handle double-click simulation: use last clicked as the 'dblclick'
+    # Handle last clicked as double-click simulation
     if map_data and map_data.get("last_clicked"):
         lat = map_data["last_clicked"]["lat"]
         lng = map_data["last_clicked"]["lng"]
         clicked = (lat,lng)
-        # Only set if point_to_set is selected
         if point_to_set == "Order A → Pickup":
             st.session_state["a_pickup"] = clicked
         elif point_to_set == "Order A → Dropoff":
@@ -116,18 +108,4 @@ with col_map:
         elif point_to_set == "Order B → Pickup":
             st.session_state["b_pickup"] = clicked
         elif point_to_set == "Order B → Dropoff":
-            st.session_state["b_dropoff"] = clicked
-
-# Quick controls
-st.subheader("Controls")
-if st.button("Clear all points"):
-    for key in ["a_pickup","a_dropoff","b_pickup","b_dropoff"]:
-        st.session_state[key] = None
-    st.success("All points cleared!")
-    st.stop()
-
-# Analysis
-def miles_between(p1,p2):
-    try:
-        return geo
 
