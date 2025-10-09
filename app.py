@@ -108,4 +108,57 @@ with col_map:
         elif point_to_set == "Order B → Pickup":
             st.session_state["b_pickup"] = clicked
         elif point_to_set == "Order B → Dropoff":
+            st.session_state["b_dropoff"] = clicked
+
+# Quick controls
+st.subheader("Controls")
+if st.button("Clear all points"):
+    for key in ["a_pickup","a_dropoff","b_pickup","b_dropoff"]:
+        st.session_state[key] = None
+    st.success("All points cleared!")
+    st.stop()
+
+# Analysis
+def miles_between(p1, p2):
+    try:
+        return geodesic(p1, p2).miles
+    except Exception:
+        return None
+
+a_len = miles_between(st.session_state["a_pickup"], st.session_state["a_dropoff"])
+b_len = miles_between(st.session_state["b_pickup"], st.session_state["b_dropoff"])
+pick_dist = miles_between(st.session_state["a_pickup"], st.session_state["b_pickup"])
+drop_dist = miles_between(st.session_state["a_dropoff"], st.session_state["b_dropoff"])
+
+if a_len: st.write(f"Order A route length: **{a_len:.2f} mi**")
+if b_len: st.write(f"Order B route length: **{b_len:.2f} mi**")
+if pick_dist: st.write(f"Distance between pickups: **{pick_dist:.2f} mi**")
+if drop_dist: st.write(f"Distance between dropoffs: **{drop_dist:.2f} mi**")
+
+decision = None
+reasons = []
+
+if st.session_state["a_pickup"] and st.session_state["a_dropoff"] and st.session_state["b_pickup"]:
+    pickup_ok = pick_dist is not None and pick_dist <= pickup_radius_threshold
+    dropoff_ok = (drop_dist is None) or (drop_dist <= dropoff_detour_threshold)
+
+    reasons.append("Pickup proximity OK" if pickup_ok else "Pickup proximity TOO FAR")
+    if st.session_state["b_dropoff"]:
+        reasons.append("Dropoff detour OK" if dropoff_ok else "Dropoff detour TOO FAR")
+    else:
+        reasons.append("No B dropoff (pickup-only check)")
+
+    if pickup_ok and dropoff_ok:
+        decision = "✅ Combine (good match)"
+    elif pickup_ok and not dropoff_ok:
+        decision = "⚠️ Maybe (pickup OK, dropoff looks far)"
+    else:
+        decision = "❌ Do not combine (pickup too far)"
+else:
+    decision = "⚠️ Need Order A (pickup+dropoff) and Order B pickup to analyze."
+
+st.markdown("### Recommendation")
+st.write(f"**{decision}**")
+if reasons:
+    st.caption(" • ".join(reasons))
 
