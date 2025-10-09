@@ -1,4 +1,4 @@
-# app.py
+ # app.py
 import streamlit as st
 from streamlit_folium import st_folium
 import folium
@@ -81,7 +81,7 @@ with col1:
             st.success(f"Set Order A pickup at {clicked[0]:.5f}, {clicked[1]:.5f}")
         elif point_to_set == "Order A → Dropoff":
             st.session_state["a_dropoff"] = clicked
-            st.success(f"Set Order A dropoff at {clicked[0]:.5f}, {clicked[1]:.5f}")
+st.success(f"Set Order A dropoff at {clicked[0]:.5f}, {clicked[1]:.5f}")
         elif point_to_set == "Order B → Pickup":
             st.session_state["b_pickup"] = clicked
             st.success(f"Set Order B pickup at {clicked[0]:.5f}, {clicked[1]:.5f}")
@@ -122,7 +122,7 @@ with col2:
     pickups_distance = None
     dropoffs_distance = None
 
-    if st.session_state["a_pickup"] and st.session_state["a_dropoff"]:
+if st.session_state["a_pickup"] and st.session_state["a_dropoff"]:
         a_length = miles_between(st.session_state["a_pickup"], st.session_state["a_dropoff"])
         st.write(f"Order A route length: **{a_length:.2f} miles**")
     else:
@@ -135,7 +135,7 @@ with col2:
         st.write("Order B route length: —")
 
     if st.session_state["a_pickup"] and st.session_state["b_pickup"]:
-        pickups_distance = miles_between(st.session_state["a_pickup"], st.session_state["b_pickup"])
+  pickups_distance = miles_between(st.session_state["a_pickup"], st.session_state["b_pickup"])
         st.write(f"Distance between pickups: **{pickups_distance:.2f} miles**")
     else:
         st.write("Distance between pickups: —")
@@ -166,7 +166,7 @@ with col2:
         # if we have B dropoff, check dropoff detour
         if st.session_state["b_dropoff"] and dropoffs_distance is not None:
             if dropoffs_distance <= dropoff_detour_threshold:
-                reasons.append("Dropoff detour OK")
+reasons.append("Dropoff detour OK")
                 dropoff_ok = True
             else:
                 reasons.append("Dropoff detour TOO FAR")
@@ -195,3 +195,7 @@ with col2:
 
 st.markdown("---")
 st.caption("Notes: Distances are straight-line (geodesic) approximations — they are fast and give a good heuristic. Use them for quick decisions. For exact driving times use a routing API (future upgrade).")
+
+
+
+       
