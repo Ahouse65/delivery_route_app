@@ -1,6 +1,7 @@
 streamlit
-googlemaps
+streamlit-folium
+folium
 geopy
-streamlit_js_eval
-pydeck
+
+
 
