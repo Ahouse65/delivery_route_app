@@ -1,7 +1,3 @@
-streamlit
-streamlit-folium
-folium
-geopy
-
+pip install openrouteservice
 
 
