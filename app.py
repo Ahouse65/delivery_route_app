@@ -77,11 +77,18 @@ with col1:
 
         # Assign clicked point based on selected radio
         if point_to_set == "Order A → Pickup":
+                if map_data and map_data.get("last_clicked"):
+        lat = map_data["last_clicked"]["lat"]
+        lng = map_data["last_clicked"]["lng"]
+        clicked = (lat, lng)
+
+        # Assign clicked point based on selected radio
+        if point_to_set == "Order A → Pickup":
             st.session_state["a_pickup"] = clicked
             st.success(f"Set Order A pickup at {clicked[0]:.5f}, {clicked[1]:.5f}")
         elif point_to_set == "Order A → Dropoff":
             st.session_state["a_dropoff"] = clicked
-st.success(f"Set Order A dropoff at {clicked[0]:.5f}, {clicked[1]:.5f}")
+            st.success(f"Set Order A dropoff at {clicked[0]:.5f}, {clicked[1]:.5f}")
         elif point_to_set == "Order B → Pickup":
             st.session_state["b_pickup"] = clicked
             st.success(f"Set Order B pickup at {clicked[0]:.5f}, {clicked[1]:.5f}")
@@ -89,20 +96,6 @@ st.success(f"Set Order A dropoff at {clicked[0]:.5f}, {clicked[1]:.5f}")
             st.session_state["b_dropoff"] = clicked
             st.success(f"Set Order B dropoff at {clicked[0]:.5f}, {clicked[1]:.5f}")
 
-with col2:
-    st.subheader("Quick Controls")
-    if st.button("Clear all points"):
-        st.session_state["a_pickup"] = None
-        st.session_state["a_dropoff"] = None
-        st.session_state["b_pickup"] = None
-        st.session_state["b_dropoff"] = None
-        st.experimental_rerun()
-
-    st.markdown("---")
-    st.subheader("Current points")
-    st.write("**Order A**")
-    st.write("Pickup:", st.session_state["a_pickup"])
-    st.write("Dropoff:", st.session_state["a_dropoff"])
     st.write("**Order B**")
     st.write("Pickup:", st.session_state["b_pickup"])
     st.write("Dropoff:", st.session_state["b_dropoff"])
@@ -199,3 +192,4 @@ st.caption("Notes: Distances are straight-line (geodesic) approximations — the
 
 
        
+
