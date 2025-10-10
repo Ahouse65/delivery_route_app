@@ -1,171 +1,86 @@
 import streamlit as st
-from streamlit_folium import st_folium
+from PIL import Image
+import pytesseract
+from geopy.geocoders import Nominatim
 import folium
-from folium.plugins import LocateControl
-import openrouteservice
-from openrouteservice import convert
+from streamlit_folium import st_folium
 
-st.set_page_config(page_title="Quick Route Drawer with Routes", layout="wide")
+st.set_page_config(page_title="Multi-App Screenshot Route Analyzer", layout="wide")
+st.title("🚗 Multi-App Screenshot Route Analyzer")
 
-FALLBACK_CENTER = (44.9778, -93.2650)
-DEFAULT_ZOOM = 13
+st.markdown("""
+Compare two delivery routes from screenshots (DoorDash, Uber Eats, Grubhub, etc.).
+Each screenshot is scanned for pickup and drop-off addresses, which are geocoded and drawn on the map.
+""")
 
-st.title("🗺️ Quick Route Drawer — Automatic Routes")
+geolocator = Nominatim(user_agent="route-analyzer")
 
-# Sidebar
-st.sidebar.header("⚙️ Settings")
-pickup_radius_threshold = st.sidebar.number_input("Pickup proximity threshold (miles)", 0.1, 10.0, 1.0)
-dropoff_detour_threshold = st.sidebar.number_input("Dropoff detour threshold (miles)", 0.1, 20.0, 3.0)
-ors_api_key = st.sidebar.text_input("OpenRouteService API Key", type="password")
+def extract_addresses_from_image(image):
+    """Run OCR and find likely address lines."""
+    text = pytesseract.image_to_string(image)
+    lines = [line.strip() for line in text.split("\n") if len(line.strip()) > 5]
+    keywords = ["st", "ave", "rd", "dr", "blvd", "pl", "ct", "ln", "way", "circle"]
+    addresses = [l for l in lines if any(k in l.lower() for k in keywords)]
+    return text, addresses
 
-st.sidebar.markdown(
-    "**Instructions:**\n"
-    "1. Select point type (pickup/dropoff A/B)\n"
-    "2. Double-click on map to add marker\n"
-    "3. Drag markers to adjust\n"
-    "4. Routes will be drawn automatically\n"
-    "5. Distances are based on actual routes"
-)
 
-# Initialize session state
-for key in ["a_pickup","a_dropoff","b_pickup","b_dropoff"]:
-    if key not in st.session_state:
-        st.session_state[key] = None
-
-# Point selection
-point_to_set = st.radio(
-    "Select point to set",
-    ("Order A → Pickup", "Order A → Dropoff", "Order B → Pickup", "Order B → Dropoff"),
-    index=0, horizontal=True
-)
-
-# Map and screenshot columns
-col_map, col_screenshot = st.columns([2,1])
-
-with col_screenshot:
-    st.subheader("Screenshot Reference (optional)")
-    uploaded_file = st.file_uploader("Upload route screenshot", type=["png","jpg","jpeg"])
-    if uploaded_file is not None:
-        st.image(uploaded_file, use_column_width=True)
-
-# Determine map center
-if st.session_state["a_pickup"]:
-    map_center = st.session_state["a_pickup"]
-    map_zoom = 16
-elif st.session_state["a_pickup"] and st.session_state["a_dropoff"]:
-    lat_center = (st.session_state["a_pickup"][0] + st.session_state["a_dropoff"][0]) / 2
-    lon_center = (st.session_state["a_pickup"][1] + st.session_state["a_dropoff"][1]) / 2
-    map_center = (lat_center, lon_center)
-    map_zoom = DEFAULT_ZOOM
-else:
-    map_center = FALLBACK_CENTER
-    map_zoom = DEFAULT_ZOOM
-
-with col_map:
-    # Create map
-    m = folium.Map(location=map_center, zoom_start=map_zoom, control_scale=True)
-    LocateControl(auto_start=False).add_to(m)
-
-    # Add draggable markers
-    def add_draggable_marker(key, color, popup):
-        point = st.session_state[key]
-        if point:
-            folium.Marker(location=point, icon=folium.Icon(color=color), popup=popup, draggable=True).add_to(m)
-
-    add_draggable_marker("a_pickup", "red", "A pickup")
-    add_draggable_marker("a_dropoff", "darkred", "A dropoff")
-    add_draggable_marker("b_pickup", "blue", "B pickup")
-    add_draggable_marker("b_dropoff", "darkblue", "B dropoff")
-
-    # Draw routes if API key is provided
-    if ors_api_key:
-        client = openrouteservice.Client(key=ors_api_key)
-
-        def get_route(start, end):
-            coords = [(start[1], start[0]), (end[1], end[0])]  # ORS uses (lon, lat)
-            try:
-                route = client.directions(coords)
-                geometry = route['routes'][0]['geometry']
-                decoded = convert.decode_polyline(geometry)
-                return [(point[1], point[0]) for point in decoded['coordinates']], route['routes'][0]['summary']['distance'] * 0.000621371  # meters to miles
-            except:
-                return [start, end], None
-
-        # Order A route
-        if st.session_state["a_pickup"] and st.session_state["a_dropoff"]:
-            route_points, route_distance = get_route(st.session_state["a_pickup"], st.session_state["a_dropoff"])
-            folium.PolyLine(route_points, color="red", weight=5, opacity=0.8).add_to(m)
-            if route_distance: st.write(f"Order A route distance: **{route_distance:.2f} mi**")
-
-        # Order B route
-        if st.session_state["b_pickup"] and st.session_state["b_dropoff"]:
-            route_points, route_distance = get_route(st.session_state["b_pickup"], st.session_state["b_dropoff"])
-            folium.PolyLine(route_points, color="blue", weight=5, opacity=0.8).add_to(m)
-            if route_distance: st.write(f"Order B route distance: **{route_distance:.2f} mi**")
-            
-    m.add_child(folium.LatLngPopup())
-    map_data = st_folium(m, width="100%", height=650, returned_objects=['last_clicked'])
-
-    # Handle double-click simulation
-    if map_data and map_data.get("last_clicked"):
-        lat = map_data["last_clicked"]["lat"]
-        lng = map_data["last_clicked"]["lng"]
-        clicked = (lat,lng)
-        if point_to_set == "Order A → Pickup": st.session_state["a_pickup"] = clicked
-        elif point_to_set == "Order A → Dropoff": st.session_state["a_dropoff"] = clicked
-        elif point_to_set == "Order B → Pickup": st.session_state["b_pickup"] = clicked
-        elif point_to_set == "Order B → Dropoff": st.session_state["b_dropoff"] = clicked
-
-# Controls
-st.subheader("Controls")
-if st.button("Clear all points"):
-    for key in ["a_pickup","a_dropoff","b_pickup","b_dropoff"]:
-        st.session_state[key] = None
-    st.success("All points cleared!")
-    st.stop()
-
-# Distance comparison if routes exist
-def miles_between(p1, p2):
-    try:
-        from geopy.distance import geodesic
-        return geodesic(p1, p2).miles
-    except Exception:
-        return None
-
-if st.session_state["a_pickup"] and st.session_state["b_pickup"]:
-    pick_dist = miles_between(st.session_state["a_pickup"], st.session_state["b_pickup"])
-else:
-    pick_dist = None
-
-if st.session_state["a_dropoff"] and st.session_state["b_dropoff"]:
-    drop_dist = miles_between(st.session_state["a_dropoff"], st.session_state["b_dropoff"])
-else:
-    drop_dist = None
-
-decision = None
-reasons = []
-
-if st.session_state["a_pickup"] and st.session_state["a_dropoff"] and st.session_state["b_pickup"]:
-    pickup_ok = pick_dist is not None and pick_dist <= pickup_radius_threshold
-    dropoff_ok = (drop_dist is None) or (drop_dist <= dropoff_detour_threshold)
-
-    reasons.append("Pickup proximity OK" if pickup_ok else "Pickup proximity TOO FAR")
-    if st.session_state["b_dropoff"]:
-        reasons.append("Dropoff detour OK" if dropoff_ok else "Dropoff detour TOO FAR")
+col1, col2 = st.columns(2)
+images = []
+for i, c in enumerate([col1, col2]):
+    uploaded = c.file_uploader(f"Upload Screenshot {i+1}", type=["png", "jpg", "jpeg"])
+    if uploaded:
+        img = Image.open(uploaded)
+        c.image(img, caption=f"Screenshot {i+1}", use_column_width=True)
+        images.append(img)
     else:
-        reasons.append("No B dropoff (pickup-only check)")
+        images.append(None)
 
-    if pickup_ok and dropoff_ok:
-        decision = "✅ Combine (good match)"
-    elif pickup_ok and not dropoff_ok:
-        decision = "⚠️ Maybe (pickup OK, dropoff looks far)"
-    else:
-        decision = "❌ Do not combine (pickup too far)"
-else:
-    decision = "⚠️ Need Order A (pickup+dropoff) and Order B pickup to analyze."
+if all(images):
+    st.divider()
+    cols = st.columns(2)
+    routes = []
 
-st.markdown("### Recommendation")
-st.write(f"**{decision}**")
-if reasons:
-    st.caption(" • ".join(reasons))
+    for i, (img, c) in enumerate(zip(images, cols)):
+        c.subheader(f"App {i+1} OCR Results")
+        text, addresses = extract_addresses_from_image(img)
+        c.text_area("Extracted Text", text, height=150)
+        if len(addresses) < 2:
+            c.warning("⚠️ Couldn’t detect at least two address-like lines.")
+            routes.append(None)
+        else:
+            c.write("📍 Possible addresses found:")
+            for j, addr in enumerate(addresses):
+                c.write(f"{j+1}. {addr}")
+            pickup = c.selectbox("Pickup", options=addresses, key=f"pickup_{i}")
+            dropoff = c.selectbox("Dropoff", options=addresses, index=min(1, len(addresses)-1), key=f"dropoff_{i}")
+            routes.append((pickup, dropoff))
+
+    if st.button("🗺️ Draw Combined Routes"):
+        m = None
+        colors = ["red", "blue"]
+
+        for i, route in enumerate(routes):
+            if route:
+                p_addr, d_addr = route
+                try:
+                    p = geolocator.geocode(p_addr)
+                    d = geolocator.geocode(d_addr)
+                except Exception as e:
+                    st.error(f"Geocoding failed for route {i+1}: {e}")
+                    continue
+
+                if p and d:
+                    coords = [(p.latitude, p.longitude), (d.latitude, d.longitude)]
+                    if not m:
+                        m = folium.Map(location=coords[0], zoom_start=12)
+                    folium.Marker(coords[0], popup=f"Pickup {i+1}", icon=folium.Icon(color="green")).add_to(m)
+                    folium.Marker(coords[1], popup=f"Dropoff {i+1}", icon=folium.Icon(color="red")).add_to(m)
+                    folium.PolyLine(coords, color=colors[i], weight=4, opacity=0.7).add_to(m)
+                else:
+                    st.warning(f"Couldn’t geocode both points for route {i+1}.")
+        
+        if m:
+            st_folium(m, width=800, height=550)
+        else:
+            st.error("No valid routes to display.")
 
