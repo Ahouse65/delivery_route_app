@@ -1,8 +1,9 @@
 streamlit>=1.25.0
-streamlit-folium>=0.12.0
-geopy>=2.3.0
-openrouteservice>=2.3.0
-folium>=0.14.0
+pytesseract
+Pillow
+geopy
+folium
+streamlit-folium
 
 
 
