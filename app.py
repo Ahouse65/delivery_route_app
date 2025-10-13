@@ -37,7 +37,6 @@ def load_api_key() -> Optional[str]:
 @st.cache_data(ttl=24*60*60)
 def geocode(address: str, country_hint="US") -> Optional[Place]:
     txt = address.strip()
-    # Direct coordinates input
     try:
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
@@ -45,7 +44,6 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
                 return Place(txt, lat, lon, f"{lat:.6f}, {lon:.6f}")
     except:
         pass
-    # Use Nominatim
     try:
         geolocator = Nominatim(user_agent="delivery-route-app")
         q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
@@ -57,10 +55,25 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
     return None
 
 # -----------------------------
+# Straight-line fallback
+# -----------------------------
+def straight_line_route(seq: List[Tuple[float,float]], buffer_pct=20) -> Dict[str, Any]:
+    def approx_miles(p,q):
+        return (((p[0]-q[0])**2 + (p[1]-q[1])**2)**0.5)*69.0
+    distance = sum(approx_miles(seq[i], seq[i+1]) for i in range(len(seq)-1))
+    duration = (distance/22.0)*60.0*(1 + buffer_pct/100)
+    return {
+        "distance_m": distance*1609.34,
+        "duration_s": duration*60.0,
+        "geometry":[list(p) for p in seq],
+        "source":"fallback"
+    }
+
+# -----------------------------
 # ORS directions
 # -----------------------------
 @st.cache_data(ttl=10*60)
-def ors_directions(seq: List[Tuple[float,float]], api_key: Optional[str], profile="driving-car") -> Dict[str, Any]:
+def ors_directions(seq: List[Tuple[float,float]], api_key: Optional[str], profile="driving-car") -> Dict[str,Any]:
     if not api_key:
         return straight_line_route(seq)
     try:
@@ -86,4 +99,10 @@ def ors_directions(seq: List[Tuple[float,float]], api_key: Optional[str], profil
         distance = float(props.get("distance", 0))
         duration = float(props.get("duration", 0))
         coords_latlon = [[c[1], c[0]] for c in geom]
-        return {"distance_m": distance, "duration_s": duration, "geometry": coords
+        return {"distance_m": distance, "duration_s": duration, "geometry": coords_latlon, "source":"ors"}
+    except:
+        return straight_line_route(seq)
+
+# -----------------------------
+# Map rendering
+# ------------
