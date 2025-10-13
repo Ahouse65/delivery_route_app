@@ -40,8 +40,8 @@ def load_api_key() -> Optional[str]:
 @st.cache_data(ttl=60*60*24)
 def geocode(address: str, country_hint="US") -> Optional[Place]:
     txt = address.strip()
+    # Try direct coordinates
     try:
-        # Direct coordinates
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
             if -90 <= lat <= 90 and -180 <= lon <= 180:
@@ -49,6 +49,7 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
     except Exception:
         pass
 
+    # Try Nominatim geocoding
     try:
         geolocator = Nominatim(user_agent="delivery-route-app")
         q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
@@ -85,9 +86,4 @@ def ors_directions(seq: List[Tuple[float,float]], api_key: Optional[str], profil
         coords = [[lon, lat] for lat, lon in seq]
         url = f"https://api.openrouteservice.org/v2/directions/{profile}?format=geojson"
         headers = {"Authorization": api_key,"Content-Type":"application/json"}
-        payload={"coordinates":coords,"instructions":False,"geometry_simplify":True,"preference":"fastest","units":"m"}
-        resp = requests.post(url, headers=headers, json=payload, timeout=20)
-        if resp.status_code != 200:
-            return straight_line_route(seq)
-        data = resp.json()
-        features =
+        payload = {"coordinates": coords, "instructions":
