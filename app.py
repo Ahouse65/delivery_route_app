@@ -173,7 +173,6 @@ if submitted:
     if failed:
         st.warning("Could not geocode: " + ", ".join(failed))
 
-    # Only use successfully geocoded addresses
     if all(geocoded.values()):
         seq1 = [geocoded["Start"], geocoded["Pickup A"], geocoded["Delivery A"],
                 geocoded["Pickup B"], geocoded["Delivery B"]]
@@ -192,7 +191,7 @@ if submitted:
             "buffer_pct": buffer_pct
         }
 
-# Render map & summary if routes exist
+# Render map & summary
 if "routes" in st.session_state:
     rstate = st.session_state["routes"]
     route1, route2 = rstate["route1"], rstate["route2"]
@@ -200,12 +199,4 @@ if "routes" in st.session_state:
     p_start, stops = rstate["p_start"], rstate["stops"]
 
     def miles(m): return m/1609.34
-    def minutes(s): return s/60
-
-    total1_d, total1_t = miles(route1["distance_m"]), minutes(route1["duration_s"])*(1+buffer_pct/100)
-    total2_d, total2_t = miles(route2["distance_m"]), minutes(route2["duration_s"])*(1+buffer_pct/100)
-
-    st.subheader("Route Summary")
-    c1,c2,c3 = st.columns([1,1,0.8])
-    with c1:
-        st.metric("Route 1 distance", f"{total1
+   
