@@ -111,14 +111,22 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
     TileLayer("OpenStreetMap").add_to(m)
     Marker(p_start.coords, tooltip="Start", popup=p_start.label, icon=Icon(color="blue")).add_to(m)
 
+    # Pickups green, deliveries red
     for i,p in enumerate(stops):
         color = "green" if i % 2 == 0 else "red"
         Marker(p.coords, tooltip=f"Stop {i+1}", popup=p.label, icon=Icon(color=color)).add_to(m)
 
-    colors = ["blue","red"]
+    # Route lines with distinct colors
+    route_colors = ["blue", "red", "green", "orange"]
     for i, r in enumerate(routes):
         if r.get("geometry"):
-            PolyLine(r["geometry"], color=colors[i % 2], weight=4, opacity=0.8).add_to(m)
+            PolyLine(
+                r["geometry"],
+                color=route_colors[i % len(route_colors)],
+                weight=5,
+                opacity=0.8,
+                dash_array="5,5" if i > 0 else None  # dashed for alternate routes
+            ).add_to(m)
 
     min_lat = min(p[0] for p in pts)
     max_lat = max(p[0] for p in pts)
