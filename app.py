@@ -209,4 +209,9 @@ if "routes" in st.session_state:
         c1, c2, c3 = st.columns([1,1,0.8])
         with c1:
             st.metric("Route 1 distance", f"{total1_d:.2f} mi")
-            st.metric("ETA (+buffer)", f"{total1
+            st.metric("ETA (+buffer)", f"{total1_t:.1f} min")
+        with c2:
+            st.metric("Route 2 distance", f"{total2_d:.2f} mi")
+            st.metric("ETA (+buffer)", f"{total2_t:.1f} min")
+        with c3:
+            shorter = "Route 1"
