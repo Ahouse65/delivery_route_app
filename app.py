@@ -23,7 +23,7 @@ class Place:
         return (self.lat, self.lon)
 
 # -----------------------------
-# Load ORS API key
+# ORS API key
 # -----------------------------
 def load_api_key() -> Optional[str]:
     try:
@@ -31,8 +31,10 @@ def load_api_key() -> Optional[str]:
     except:
         return os.environ.get("ORS_API_KEY")
 
+API_KEY = load_api_key()
+
 # -----------------------------
-# Geocoding
+# Geocoding with caching
 # -----------------------------
 @st.cache_data(ttl=24*60*60)
 def geocode(address: str, country_hint="US") -> Optional[Place]:
@@ -65,7 +67,7 @@ def straight_line_route(seq: List[Place], buffer_pct=20) -> Dict[str, Any]:
     return {"distance_m": distance*1609.34, "duration_s": duration*60, "geometry":[list(p.coords) for p in seq], "source":"fallback"}
 
 # -----------------------------
-# ORS directions
+# ORS routing with caching
 # -----------------------------
 @st.cache_data(ttl=10*60)
 def ors_directions(seq: List[Place], api_key: Optional[str], profile="driving-car") -> Dict[str, Any]:
@@ -123,19 +125,19 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
     st_folium(m, width=None, height=540)
 
 # -----------------------------
-# Streamlit UI
+# Streamlit layout
 # -----------------------------
 st.set_page_config(page_title="Delivery Route Planner", page_icon=":truck:", layout="wide")
-st.title("Delivery Route Planner with ORS Routing")
+st.title("Delivery Route Planner")
 
-API_KEY = load_api_key()
-
-with st.form("delivery_form"):
+with st.sidebar.form("inputs"):
+    st.header("Addresses")
     start = st.text_input("Start address")
     pickup_a = st.text_input("Pickup A")
     delivery_a = st.text_input("Delivery A")
     pickup_b = st.text_input("Pickup B")
     delivery_b = st.text_input("Delivery B")
+    st.header("Settings")
     buffer_pct = st.slider("ETA buffer %", 0, 100, 20)
     profile = st.selectbox("Travel mode", ["driving-car","cycling-regular","foot-walking"])
     submitted = st.form_submit_button("Compute Routes")
