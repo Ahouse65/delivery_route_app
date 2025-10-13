@@ -1,9 +1,11 @@
 streamlit>=1.25.0
-pytesseract
-Pillow
 geopy
 folium
 streamlit-folium
+requests
+dataclasses; python_version<"3.7"
+
+
 
 
 
