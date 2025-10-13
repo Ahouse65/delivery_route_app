@@ -39,6 +39,9 @@ API_KEY = load_api_key()
 @st.cache_data(ttl=24*60*60)
 def geocode(address: str, country_hint="US") -> Optional[Place]:
     txt = address.strip()
+    if not txt:
+        return None
+    # try lat, lon input
     try:
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
@@ -46,6 +49,7 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
                 return Place(txt, lat, lon, f"{lat:.6f}, {lon:.6f}")
     except:
         pass
+    # try geocoding string
     try:
         geolocator = Nominatim(user_agent="delivery-route-app")
         q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
@@ -64,10 +68,11 @@ def straight_line_route(seq: List[Place], buffer_pct=20) -> Dict[str, Any]:
         return (((p.lat - q.lat)**2 + (p.lon - q.lon)**2)**0.5)*69.0
     distance = sum(approx_miles(seq[i], seq[i+1]) for i in range(len(seq)-1))
     duration = (distance/22.0)*60*(1 + buffer_pct/100)
-    return {"distance_m": distance*1609.34, "duration_s": duration*60, "geometry":[list(p.coords) for p in seq], "source":"fallback"}
+    return {"distance_m": distance*1609.34, "duration_s": duration*60,
+            "geometry":[list(p.coords) for p in seq], "source":"fallback"}
 
 # -----------------------------
-# ORS routing with caching
+# ORS routing
 # -----------------------------
 @st.cache_data(ttl=10*60)
 def ors_directions(seq: List[Place], api_key: Optional[str], profile="driving-car") -> Dict[str, Any]:
@@ -77,7 +82,8 @@ def ors_directions(seq: List[Place], api_key: Optional[str], profile="driving-ca
         coords = [[p.lon, p.lat] for p in seq]
         url = f"https://api.openrouteservice.org/v2/directions/{profile}?format=geojson"
         headers = {"Authorization": api_key, "Content-Type": "application/json"}
-        payload = {"coordinates": coords, "instructions": False, "geometry_simplify": True, "preference": "fastest", "units": "m"}
+        payload = {"coordinates": coords, "instructions": False, "geometry_simplify": True,
+                   "preference": "fastest", "units": "m"}
         resp = requests.post(url, headers=headers, json=payload, timeout=20)
         if resp.status_code != 200:
             return straight_line_route(seq)
@@ -130,43 +136,68 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
 st.set_page_config(page_title="Delivery Route Planner", page_icon=":truck:", layout="wide")
 st.title("Delivery Route Planner")
 
+# Sidebar inputs
 with st.sidebar.form("inputs"):
     st.header("Addresses")
-    start = st.text_input("Start address")
-    pickup_a = st.text_input("Pickup A")
-    delivery_a = st.text_input("Delivery A")
-    pickup_b = st.text_input("Pickup B")
-    delivery_b = st.text_input("Delivery B")
+    start = st.text_input("Start address", value=st.session_state.get("start",""))
+    pickup_a = st.text_input("Pickup A", value=st.session_state.get("pickup_a",""))
+    delivery_a = st.text_input("Delivery A", value=st.session_state.get("delivery_a",""))
+    pickup_b = st.text_input("Pickup B", value=st.session_state.get("pickup_b",""))
+    delivery_b = st.text_input("Delivery B", value=st.session_state.get("delivery_b",""))
     st.header("Settings")
-    buffer_pct = st.slider("ETA buffer %", 0, 100, 20)
-    profile = st.selectbox("Travel mode", ["driving-car","cycling-regular","foot-walking"])
+    buffer_pct = st.slider("ETA buffer %", 0, 100, st.session_state.get("buffer_pct",20))
+    profile = st.selectbox("Travel mode", ["driving-car","cycling-regular","foot-walking"], index=0)
     submitted = st.form_submit_button("Compute Routes")
 
+# Process inputs
 if submitted:
-    missing = [n for n,v in [("Start", start),("Pickup A", pickup_a),("Delivery A", delivery_a),
-                              ("Pickup B", pickup_b),("Delivery B", delivery_b)] if not v.strip()]
+    st.session_state.update({
+        "start": start,
+        "pickup_a": pickup_a,
+        "delivery_a": delivery_a,
+        "pickup_b": pickup_b,
+        "delivery_b": delivery_b,
+        "buffer_pct": buffer_pct
+    })
+
+    addresses = [("Start", start), ("Pickup A", pickup_a), ("Delivery A", delivery_a),
+                 ("Pickup B", pickup_b), ("Delivery B", delivery_b)]
+    missing = [n for n,v in addresses if not v.strip()]
     if missing:
-        st.error("Please fill: " + ", ".join(missing))
-        st.stop()
+        st.warning("Please fill: " + ", ".join(missing))
 
     with st.spinner("Geocoding addresses..."):
-        p_start = geocode(start)
-        p_pickup_a = geocode(pickup_a)
-        p_delivery_a = geocode(delivery_a)
-        p_pickup_b = geocode(pickup_b)
-        p_delivery_b = geocode(delivery_b)
+        geocoded = {name: geocode(addr) for name, addr in addresses}
 
-    bad = [n for n,v in [("Start", p_start),("Pickup A", p_pickup_a),("Delivery A", p_delivery_a),
-                          ("Pickup B", p_pickup_b), ("Delivery B", p_delivery_b)] if not v]
-    if bad:
-        st.error("Could not geocode: " + ", ".join(bad))
-        st.stop()
+    failed = [name for name,p in geocoded.items() if not p]
+    if failed:
+        st.warning("Could not geocode: " + ", ".join(failed))
 
-    seq1 = [p_start, p_pickup_a, p_delivery_a, p_pickup_b, p_delivery_b]
-    seq2 = [p_start, p_pickup_b, p_delivery_b, p_pickup_a, p_delivery_a]
+    # Only use successfully geocoded addresses
+    if all(geocoded.values()):
+        seq1 = [geocoded["Start"], geocoded["Pickup A"], geocoded["Delivery A"],
+                geocoded["Pickup B"], geocoded["Delivery B"]]
+        seq2 = [geocoded["Start"], geocoded["Pickup B"], geocoded["Delivery B"],
+                geocoded["Pickup A"], geocoded["Delivery A"]]
 
-    route1 = ors_directions(seq1, API_KEY, profile)
-    route2 = ors_directions(seq2, API_KEY, profile)
+        route1 = ors_directions(seq1, API_KEY, profile)
+        route2 = ors_directions(seq2, API_KEY, profile)
+
+        st.session_state["routes"] = {
+            "p_start": geocoded["Start"],
+            "stops": [geocoded["Pickup A"], geocoded["Delivery A"],
+                      geocoded["Pickup B"], geocoded["Delivery B"]],
+            "route1": route1,
+            "route2": route2,
+            "buffer_pct": buffer_pct
+        }
+
+# Render map & summary if routes exist
+if "routes" in st.session_state:
+    rstate = st.session_state["routes"]
+    route1, route2 = rstate["route1"], rstate["route2"]
+    buffer_pct = rstate["buffer_pct"]
+    p_start, stops = rstate["p_start"], rstate["stops"]
 
     def miles(m): return m/1609.34
     def minutes(s): return s/60
@@ -177,14 +208,4 @@ if submitted:
     st.subheader("Route Summary")
     c1,c2,c3 = st.columns([1,1,0.8])
     with c1:
-        st.metric("Route 1 distance", f"{total1_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{total1_t:.1f} min")
-    with c2:
-        st.metric("Route 2 distance", f"{total2_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{total2_t:.1f} min")
-    with c3:
-        shorter = "Route 1" if total1_t <= total2_t else "Route 2"
-        st.success(f"Shorter ETA: {shorter}")
-
-    stops = [p_pickup_a, p_delivery_a, p_pickup_b, p_delivery_b]
-    render_map(p_start, stops, [route1, route2])
+        st.metric("Route 1 distance", f"{total1
