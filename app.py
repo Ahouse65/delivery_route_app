@@ -180,30 +180,33 @@ if submitted:
         "buffer_pct": buffer_pct
     }
 
+# -----------------------------
+# Display routes and summary
+# -----------------------------
 if "routes" in st.session_state:
     rstate = st.session_state["routes"]
     route1, route2 = rstate["route1"], rstate["route2"]
     buffer_pct = rstate["buffer_pct"]
     p_start, stops = rstate["p_start"], rstate["stops"]
 
-    def miles(m): return m/1609.34
-    def minutes(s): return s/60
+    # Handle ORS errors
+    if route1.get("source") != "ors":
+        st.error(f"Route 1 error: {route1.get('error','Unknown error')}")
+    if route2.get("source") != "ors":
+        st.error(f"Route 2 error: {route2.get('error','Unknown error')}")
 
-    total1_d = miles(route1["distance_m"])
-    total1_t = minutes(route1["duration_s"]) * (1 + buffer_pct/100)
-    total2_d = miles(route2["distance_m"])
-    total2_t = minutes(route2["duration_s"]) * (1 + buffer_pct/100)
+    # Only compute summary if routes succeeded
+    if "distance_m" in route1 and "distance_m" in route2:
+        def miles(m): return m/1609.34
+        def minutes(s): return s/60
 
-    st.subheader("Route Summary")
-    c1, c2, c3 = st.columns([1,1,0.8])
-    with c1:
-        st.metric("Route 1 distance", f"{total1_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{total1_t:.1f} min")
-    with c2:
-        st.metric("Route 2 distance", f"{total2_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{total2_t:.1f} min")
-    with c3:
-        shorter = "Route 1" if total1_t <= total2_t else "Route 2"
-        st.success(f"Shorter ETA: {shorter}")
+        total1_d = miles(route1["distance_m"])
+        total1_t = minutes(route1["duration_s"]) * (1 + buffer_pct/100)
+        total2_d = miles(route2["distance_m"])
+        total2_t = minutes(route2["duration_s"]) * (1 + buffer_pct/100)
 
-    render_map(p_start, stops, [route1, route2])
+        st.subheader("Route Summary")
+        c1, c2, c3 = st.columns([1,1,0.8])
+        with c1:
+            st.metric("Route 1 distance", f"{total1_d:.2f} mi")
+            st.metric("ETA (+buffer)", f"{total1
