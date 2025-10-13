@@ -1,9 +1,12 @@
-streamlit>=1.25.0
-geopy
-folium
-streamlit-folium
-requests
-dataclasses; python_version<"3.7"
+delivery_route_app/
+│
+├── app.py                  # Main Streamlit app
+├── requirements.txt        # Python dependencies
+├── .streamlit/
+│   └── secrets.toml        # ORS API key
+└── README.md               # Optional project info
+
+
 
 
 
