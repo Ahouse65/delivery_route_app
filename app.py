@@ -42,6 +42,7 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
     if not txt:
         return None
     try:
+        # direct coordinates
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
             if -90 <= lat <= 90 and -180 <= lon <= 180:
@@ -125,7 +126,7 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
                 color=route_colors[i % len(route_colors)],
                 weight=5,
                 opacity=0.8,
-                dash_array="5,5" if i > 0 else None  # dashed for alternate routes
+                dash_array="5,5" if i > 0 else None
             ).add_to(m)
 
     min_lat = min(p[0] for p in pts)
@@ -167,34 +168,32 @@ if submitted:
 
     addresses = [("Start", start), ("Pickup A", pickup_a), ("Delivery A", delivery_a),
                  ("Pickup B", pickup_b), ("Delivery B", delivery_b)]
-    missing = [n for n,v in addresses if not v.strip()]
-    if missing:
-        st.warning("Please fill: " + ", ".join(missing))
 
-    with st.spinner("Geocoding addresses..."):
-        geocoded = {name: geocode(addr) for name, addr in addresses}
+    # Geocode with fallback to Start location
+    geocoded = {}
+    for name, addr in addresses:
+        p = geocode(addr)
+        if p is None:
+            st.warning(f"Could not geocode {name}, using Start location as fallback.")
+            p = geocoded.get("Start")
+        geocoded[name] = p
 
-    failed = [name for name,p in geocoded.items() if not p]
-    if failed:
-        st.warning("Could not geocode: " + ", ".join(failed))
+    seq1 = [geocoded["Start"], geocoded["Pickup A"], geocoded["Delivery A"],
+            geocoded["Pickup B"], geocoded["Delivery B"]]
+    seq2 = [geocoded["Start"], geocoded["Pickup B"], geocoded["Delivery B"],
+            geocoded["Pickup A"], geocoded["Delivery A"]]
 
-    if all(geocoded.values()):
-        seq1 = [geocoded["Start"], geocoded["Pickup A"], geocoded["Delivery A"],
-                geocoded["Pickup B"], geocoded["Delivery B"]]
-        seq2 = [geocoded["Start"], geocoded["Pickup B"], geocoded["Delivery B"],
-                geocoded["Pickup A"], geocoded["Delivery A"]]
+    route1 = ors_directions(seq1, API_KEY, profile)
+    route2 = ors_directions(seq2, API_KEY, profile)
 
-        route1 = ors_directions(seq1, API_KEY, profile)
-        route2 = ors_directions(seq2, API_KEY, profile)
-
-        st.session_state["routes"] = {
-            "p_start": geocoded["Start"],
-            "stops": [geocoded["Pickup A"], geocoded["Delivery A"],
-                      geocoded["Pickup B"], geocoded["Delivery B"]],
-            "route1": route1,
-            "route2": route2,
-            "buffer_pct": buffer_pct
-        }
+    st.session_state["routes"] = {
+        "p_start": geocoded["Start"],
+        "stops": [geocoded["Pickup A"], geocoded["Delivery A"],
+                  geocoded["Pickup B"], geocoded["Delivery B"]],
+        "route1": route1,
+        "route2": route2,
+        "buffer_pct": buffer_pct
+    }
 
 # Render map & summary
 if "routes" in st.session_state:
