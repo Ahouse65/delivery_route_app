@@ -45,7 +45,6 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
     if not txt:
         return None
     try:
-        # direct coordinates
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
             if -90 <= lat <= 90 and -180 <= lon <= 180:
@@ -107,12 +106,10 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
     TileLayer("OpenStreetMap").add_to(m)
     Marker(p_start.coords, tooltip="Start", popup=p_start.label, icon=Icon(color="blue")).add_to(m)
 
-    # Pickups green, deliveries red
     for i,p in enumerate(stops):
         color = "green" if i % 2 == 0 else "red"
         Marker(p.coords, tooltip=f"Stop {i+1}", popup=p.label, icon=Icon(color=color)).add_to(m)
 
-    # Route lines with distinct colors
     route_colors = ["blue", "red"]
     for i, r in enumerate(routes):
         if r.get("geometry"):
@@ -121,7 +118,7 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
                 color=route_colors[i % len(route_colors)],
                 weight=5,
                 opacity=0.8,
-                dash_array="5,5" if i > 0 else None  # dashed for second route
+                dash_array="5,5" if i > 0 else None
             ).add_to(m)
 
     min_lat = min(p[0] for p in pts)
@@ -162,8 +159,8 @@ if submitted:
     for name, addr in addresses:
         p = geocode(addr)
         if not p:
-            st.warning(f"Could not geocode {name}. This address must be corrected to follow roads.")
-            p = geocoded.get("Start")  # fallback only if necessary
+            st.error(f"Could not geocode {name}. Please enter a valid address.")
+            st.stop()
         geocoded[name] = p
 
     seq1 = [geocoded["Start"], geocoded["Pickup A"], geocoded["Delivery A"],
@@ -198,7 +195,15 @@ if "routes" in st.session_state:
     total2_t = minutes(route2["duration_s"]) * (1 + buffer_pct/100)
 
     st.subheader("Route Summary")
-    c1, c2, c3 = st.columns([1, 1, 0.8])
+    c1, c2, c3 = st.columns([1,1,0.8])
     with c1:
         st.metric("Route 1 distance", f"{total1_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{
+        st.metric("ETA (+buffer)", f"{total1_t:.1f} min")
+    with c2:
+        st.metric("Route 2 distance", f"{total2_d:.2f} mi")
+        st.metric("ETA (+buffer)", f"{total2_t:.1f} min")
+    with c3:
+        shorter = "Route 1" if total1_t <= total2_t else "Route 2"
+        st.success(f"Shorter ETA: {shorter}")
+
+    render_map(p_start, stops, [route1, route2])
