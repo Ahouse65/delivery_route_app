@@ -32,6 +32,9 @@ def load_api_key() -> Optional[str]:
         return os.environ.get("ORS_API_KEY")
 
 API_KEY = load_api_key()
+if not API_KEY:
+    st.error("No ORS_API_KEY found! Add it to Streamlit secrets or environment variables.")
+    st.stop()
 
 # -----------------------------
 # Geocoding
@@ -60,44 +63,36 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
     return None
 
 # -----------------------------
-# Straight-line fallback
-# -----------------------------
-def straight_line_route(seq: List[Place], buffer_pct=20) -> Dict[str, Any]:
-    def approx_miles(p,q):
-        return (((p.lat - q.lat)**2 + (p.lon - q.lon)**2)**0.5)*69.0
-    distance = sum(approx_miles(seq[i], seq[i+1]) for i in range(len(seq)-1))
-    duration = (distance/22.0)*60*(1 + buffer_pct/100)
-    return {"distance_m": distance*1609.34, "duration_s": duration*60,
-            "geometry":[list(p.coords) for p in seq], "source":"fallback"}
-
-# -----------------------------
 # ORS routing
 # -----------------------------
 @st.cache_data(ttl=10*60)
-def ors_directions(seq: List[Place], api_key: Optional[str], profile="driving-car") -> Dict[str, Any]:
-    if not api_key:
-        return straight_line_route(seq)
+def ors_directions(seq: List[Place], api_key: str, profile="driving-car") -> Dict[str, Any]:
     try:
         coords = [[p.lon, p.lat] for p in seq]
         url = f"https://api.openrouteservice.org/v2/directions/{profile}?format=geojson"
         headers = {"Authorization": api_key, "Content-Type": "application/json"}
-        payload = {"coordinates": coords, "instructions": False, "geometry_simplify": True,
-                   "preference": "fastest", "units": "m"}
+        payload = {
+            "coordinates": coords,
+            "instructions": False,
+            "geometry_simplify": True,
+            "preference": "fastest",
+            "units": "m"
+        }
         resp = requests.post(url, headers=headers, json=payload, timeout=20)
         if resp.status_code != 200:
-            return straight_line_route(seq)
+            return {"error": f"ORS HTTP {resp.status_code}", "source":"fallback"}
         data = resp.json()
         features = data.get("features", [])
         if not features:
-            return straight_line_route(seq)
+            return {"error":"No features in ORS response", "source":"fallback"}
         geom = features[0].get("geometry", {}).get("coordinates", [])
         props = features[0].get("properties", {}).get("summary", {})
         distance = float(props.get("distance", 0))
         duration = float(props.get("duration", 0))
         coords_latlon = [[c[1], c[0]] for c in geom]
         return {"distance_m": distance, "duration_s": duration, "geometry": coords_latlon, "source":"ors"}
-    except:
-        return straight_line_route(seq)
+    except Exception as e:
+        return {"error": str(e), "source":"fallback"}
 
 # -----------------------------
 # Map rendering
@@ -118,7 +113,7 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
         Marker(p.coords, tooltip=f"Stop {i+1}", popup=p.label, icon=Icon(color=color)).add_to(m)
 
     # Route lines with distinct colors
-    route_colors = ["blue", "red", "green", "orange"]
+    route_colors = ["blue", "red"]
     for i, r in enumerate(routes):
         if r.get("geometry"):
             PolyLine(
@@ -126,7 +121,7 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
                 color=route_colors[i % len(route_colors)],
                 weight=5,
                 opacity=0.8,
-                dash_array="5,5" if i > 0 else None
+                dash_array="5,5" if i > 0 else None  # dashed for second route
             ).add_to(m)
 
     min_lat = min(p[0] for p in pts)
@@ -142,7 +137,6 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
 st.set_page_config(page_title="Delivery Route Planner", page_icon=":truck:", layout="wide")
 st.title("Delivery Route Planner")
 
-# Sidebar inputs
 with st.sidebar.form("inputs"):
     st.header("Addresses")
     start = st.text_input("Start address", value=st.session_state.get("start",""))
@@ -155,27 +149,21 @@ with st.sidebar.form("inputs"):
     profile = st.selectbox("Travel mode", ["driving-car","cycling-regular","foot-walking"], index=0)
     submitted = st.form_submit_button("Compute Routes")
 
-# Process inputs
 if submitted:
     st.session_state.update({
-        "start": start,
-        "pickup_a": pickup_a,
-        "delivery_a": delivery_a,
-        "pickup_b": pickup_b,
-        "delivery_b": delivery_b,
-        "buffer_pct": buffer_pct
+        "start": start, "pickup_a": pickup_a, "delivery_a": delivery_a,
+        "pickup_b": pickup_b, "delivery_b": delivery_b, "buffer_pct": buffer_pct
     })
 
     addresses = [("Start", start), ("Pickup A", pickup_a), ("Delivery A", delivery_a),
                  ("Pickup B", pickup_b), ("Delivery B", delivery_b)]
 
-    # Geocode with fallback to Start location
     geocoded = {}
     for name, addr in addresses:
         p = geocode(addr)
-        if p is None:
-            st.warning(f"Could not geocode {name}, using Start location as fallback.")
-            p = geocoded.get("Start")
+        if not p:
+            st.warning(f"Could not geocode {name}. This address must be corrected to follow roads.")
+            p = geocoded.get("Start")  # fallback only if necessary
         geocoded[name] = p
 
     seq1 = [geocoded["Start"], geocoded["Pickup A"], geocoded["Delivery A"],
@@ -195,7 +183,6 @@ if submitted:
         "buffer_pct": buffer_pct
     }
 
-# Render map & summary
 if "routes" in st.session_state:
     rstate = st.session_state["routes"]
     route1, route2 = rstate["route1"], rstate["route2"]
@@ -214,12 +201,4 @@ if "routes" in st.session_state:
     c1, c2, c3 = st.columns([1, 1, 0.8])
     with c1:
         st.metric("Route 1 distance", f"{total1_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{total1_t:.1f} min")
-    with c2:
-        st.metric("Route 2 distance", f"{total2_d:.2f} mi")
-        st.metric("ETA (+buffer)", f"{total2_t:.1f} min")
-    with c3:
-        shorter = "Route 1" if total1_t <= total2_t else "Route 2"
-        st.success(f"Shorter ETA: {shorter}")
-
-    render_map(p_start, stops, [route1, route2])
+        st.metric("ETA (+buffer)", f"{
