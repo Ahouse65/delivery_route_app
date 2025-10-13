@@ -14,10 +14,13 @@ from streamlit_folium import st_folium
 def load_api_key() -> Optional[str]:
     try:
         v = st.secrets.get("ORS_API_KEY")
-        if v: return str(v)
-    except: pass
+        if v:
+            return str(v)
+    except:
+        pass
     v = os.environ.get("ORS_API_KEY")
-    if v: return v
+    if v:
+        return v
     for path in ["ors.properties", "./ors.properties"]:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -52,18 +55,19 @@ def geocode_multi(address: str, country_hint: str = "US") -> Optional[Place]:
             lat, lon = map(float, txt.split(",",1))
             if -90<=lat<=90 and -180<=lon<=180:
                 return Place(txt, lat, lon, f"{lat:.6f}, {lon:.6f}")
-    except: pass
+    except:
+        pass
 
     q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
 
-    # Try multiple providers
     for provider in [Nominatim(user_agent="route-app"), Photon(user_agent="route-app"), ArcGIS(user_agent="route-app")]:
         try:
             res = provider.geocode(q)
             if res:
                 label = getattr(res, "address", str(res))
                 return Place(txt, res.latitude, res.longitude, label)
-        except: continue
+        except:
+            continue
     return None
 
 # -----------------------------
@@ -72,19 +76,4 @@ def geocode_multi(address: str, country_hint: str = "US") -> Optional[Place]:
 def straight_line_fallback(seq: List[Tuple[float,float]]) -> Dict[str,Any]:
     def approx_miles(p,q):
         return (((p[0]-q[0])**2 + (p[1]-q[1])**2)**0.5)*69.0
-    d = sum(approx_miles(seq[i],seq[i+1]) for i in range(len(seq)-1))
-    t_min = (d/22.0)*60.0  # 22 mph average
-    return {
-        "distance_m": d*1609.34,
-        "duration_s": t_min*60.0,
-        "geometry": [list(p) for p in seq],
-        "source": "fallback"
-    }
-
-# -----------------------------
-# ORS directions
-# -----------------------------
-@st.cache(ttl=60*10)
-def ors_directions(coords_latlon: List[Tuple[float,float]], api_key: Optional[str], profile="driving-car") -> Dict[str,Any]:
-    if not api_key:
-
+    d = sum(approx_miles(seq[i],seq[i+1]) for i i_
