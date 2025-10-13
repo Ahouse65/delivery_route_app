@@ -41,7 +41,7 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
     txt = address.strip()
     if not txt:
         return None
-    # try lat, lon input
+    # Try lat, lon input
     try:
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
@@ -49,7 +49,7 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
                 return Place(txt, lat, lon, f"{lat:.6f}, {lon:.6f}")
     except:
         pass
-    # try geocoding string
+    # Try geocoding string
     try:
         geolocator = Nominatim(user_agent="delivery-route-app")
         q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
@@ -199,4 +199,7 @@ if "routes" in st.session_state:
     p_start, stops = rstate["p_start"], rstate["stops"]
 
     def miles(m): return m/1609.34
-   
+    def minutes(s): return s/60
+
+    total1_d = miles(route1["distance_m"])
+    total1_t = minutes(route
