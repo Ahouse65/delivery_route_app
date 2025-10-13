@@ -34,14 +34,13 @@ def load_api_key() -> Optional[str]:
 API_KEY = load_api_key()
 
 # -----------------------------
-# Geocoding with caching
+# Geocoding
 # -----------------------------
 @st.cache_data(ttl=24*60*60)
 def geocode(address: str, country_hint="US") -> Optional[Place]:
     txt = address.strip()
     if not txt:
         return None
-    # Try lat, lon input
     try:
         if "," in txt:
             lat, lon = map(float, txt.split(",", 1))
@@ -49,7 +48,6 @@ def geocode(address: str, country_hint="US") -> Optional[Place]:
                 return Place(txt, lat, lon, f"{lat:.6f}, {lon:.6f}")
     except:
         pass
-    # Try geocoding string
     try:
         geolocator = Nominatim(user_agent="delivery-route-app")
         q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
@@ -113,7 +111,6 @@ def render_map(p_start: Place, stops: List[Place], routes: List[Dict[str,Any]]):
     TileLayer("OpenStreetMap").add_to(m)
     Marker(p_start.coords, tooltip="Start", popup=p_start.label, icon=Icon(color="blue")).add_to(m)
 
-    # Pickups green, deliveries red
     for i,p in enumerate(stops):
         color = "green" if i % 2 == 0 else "red"
         Marker(p.coords, tooltip=f"Stop {i+1}", popup=p.label, icon=Icon(color=color)).add_to(m)
@@ -202,4 +199,20 @@ if "routes" in st.session_state:
     def minutes(s): return s/60
 
     total1_d = miles(route1["distance_m"])
-    total1_t = minutes(route
+    total1_t = minutes(route1["duration_s"]) * (1 + buffer_pct/100)
+    total2_d = miles(route2["distance_m"])
+    total2_t = minutes(route2["duration_s"]) * (1 + buffer_pct/100)
+
+    st.subheader("Route Summary")
+    c1, c2, c3 = st.columns([1, 1, 0.8])
+    with c1:
+        st.metric("Route 1 distance", f"{total1_d:.2f} mi")
+        st.metric("ETA (+buffer)", f"{total1_t:.1f} min")
+    with c2:
+        st.metric("Route 2 distance", f"{total2_d:.2f} mi")
+        st.metric("ETA (+buffer)", f"{total2_t:.1f} min")
+    with c3:
+        shorter = "Route 1" if total1_t <= total2_t else "Route 2"
+        st.success(f"Shorter ETA: {shorter}")
+
+    render_map(p_start, stops, [route1, route2])
