@@ -27,7 +27,7 @@ def load_api_key() -> Optional[str]:
                 for line in f:
                     line = line.strip()
                     if line.startswith("ORS_API_KEY"):
-                        return line.split("=",1)[1].strip()
+                        return line.split("=", 1)[1].strip()
     return None
 
 # -----------------------------
@@ -41,7 +41,7 @@ class Place:
     label: str
 
     @property
-    def coords(self) -> Tuple[float,float]:
+    def coords(self) -> Tuple[float, float]:
         return self.lat, self.lon
 
 # -----------------------------
@@ -52,15 +52,17 @@ def geocode_multi(address: str, country_hint: str = "US") -> Optional[Place]:
     txt = address.strip()
     try:
         if "," in txt:
-            lat, lon = map(float, txt.split(",",1))
-            if -90<=lat<=90 and -180<=lon<=180:
+            lat, lon = map(float, txt.split(",", 1))
+            if -90 <= lat <= 90 and -180 <= lon <= 180:
                 return Place(txt, lat, lon, f"{lat:.6f}, {lon:.6f}")
     except:
         pass
 
     q = f"{txt}, {country_hint}" if country_hint and country_hint not in txt else txt
 
-    for provider in [Nominatim(user_agent="route-app"), Photon(user_agent="route-app"), ArcGIS(user_agent="route-app")]:
+    for provider in [Nominatim(user_agent="route-app"),
+                     Photon(user_agent="route-app"),
+                     ArcGIS(user_agent="route-app")]:
         try:
             res = provider.geocode(q)
             if res:
@@ -73,7 +75,68 @@ def geocode_multi(address: str, country_hint: str = "US") -> Optional[Place]:
 # -----------------------------
 # Straight-line fallback
 # -----------------------------
-def straight_line_fallback(seq: List[Tuple[float,float]]) -> Dict[str,Any]:
-    def approx_miles(p,q):
-        return (((p[0]-q[0])**2 + (p[1]-q[1])**2)**0.5)*69.0
-    d = sum(approx_miles(seq[i],seq[i+1]) for i i_
+def straight_line_fallback(seq: List[Tuple[float, float]]) -> Dict[str, Any]:
+    def approx_miles(p, q):
+        return (((p[0]-q[0])**2 + (p[1]-q[1])**2)**0.5) * 69.0
+
+    d = sum(approx_miles(seq[i], seq[i+1]) for i in range(len(seq)-1))
+    t_min = (d / 22.0) * 60.0  # 22 mph average
+    return {
+        "distance_m": d * 1609.34,
+        "duration_s": t_min * 60.0,
+        "geometry": [list(p) for p in seq],
+        "source": "fallback"
+    }
+
+# -----------------------------
+# ORS directions
+# -----------------------------
+@st.cache(ttl=60*10)
+def ors_directions(coords_latlon: List[Tuple[float, float]], api_key: Optional[str], profile="driving-car") -> Dict[str, Any]:
+    if not api_key:
+        return straight_line_fallback(coords_latlon)
+    try:
+        coords_lonlat = [[lon, lat] for lat, lon in coords_latlon]
+        url = f"https://api.openrouteservice.org/v2/directions/{profile}?format=geojson"
+        headers = {"Authorization": api_key, "Content-Type": "application/json"}
+        payload = {
+            "coordinates": coords_lonlat,
+            "instructions": False,
+            "geometry_simplify": True,
+            "preference": "fastest",
+            "units": "m"
+        }
+        resp = requests.post(url, headers=headers, json=payload, timeout=20)
+
+        if resp.status_code != 200:
+            return straight_line_fallback(coords_latlon)
+
+        data = resp.json()
+        features = data.get("features", [])
+        if not features:
+            return straight_line_fallback(coords_latlon)
+
+        geom = features[0].get("geometry", {}).get("coordinates", [])
+        props = features[0].get("properties", {}).get("summary", {})
+        distance_m = float(props.get("distance", 0))
+        duration_s = float(props.get("duration", 0))
+        coords_latlon_conv = [[c[1], c[0]] for c in geom]
+
+        return {
+            "distance_m": distance_m,
+            "duration_s": duration_s,
+            "geometry": coords_latlon_conv,
+            "source": "ors"
+        }
+    except:
+        return straight_line_fallback(coords_latlon)
+
+# -----------------------------
+# Map rendering
+# -----------------------------
+def render_map(p_start, p_a, p_b, r1, r2, total1_d, total1_t, total2_d, total2_t):
+    pts = [p_start.coords, p_a.coords, p_b.coords]
+    if r1.get("geometry"):
+        pts.extend([tuple(p) for p in r1["geometry"]])
+    if r2.get("geometry"):
+        pts.extend(
