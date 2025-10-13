@@ -80,7 +80,7 @@ def straight_line_fallback(seq: List[Tuple[float, float]]) -> Dict[str, Any]:
         return (((p[0]-q[0])**2 + (p[1]-q[1])**2)**0.5) * 69.0
 
     d = sum(approx_miles(seq[i], seq[i+1]) for i in range(len(seq)-1))
-    t_min = (d / 22.0) * 60.0  # 22 mph average
+    t_min = (d / 22.0) * 60.0
     return {
         "distance_m": d * 1609.34,
         "duration_s": t_min * 60.0,
@@ -107,7 +107,6 @@ def ors_directions(coords_latlon: List[Tuple[float, float]], api_key: Optional[s
             "units": "m"
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=20)
-
         if resp.status_code != 200:
             return straight_line_fallback(coords_latlon)
 
@@ -123,20 +122,3 @@ def ors_directions(coords_latlon: List[Tuple[float, float]], api_key: Optional[s
         coords_latlon_conv = [[c[1], c[0]] for c in geom]
 
         return {
-            "distance_m": distance_m,
-            "duration_s": duration_s,
-            "geometry": coords_latlon_conv,
-            "source": "ors"
-        }
-    except:
-        return straight_line_fallback(coords_latlon)
-
-# -----------------------------
-# Map rendering
-# -----------------------------
-def render_map(p_start, p_a, p_b, r1, r2, total1_d, total1_t, total2_d, total2_t):
-    pts = [p_start.coords, p_a.coords, p_b.coords]
-    if r1.get("geometry"):
-        pts.extend([tuple(p) for p in r1["geometry"]])
-    if r2.get("geometry"):
-        pts.extend(
